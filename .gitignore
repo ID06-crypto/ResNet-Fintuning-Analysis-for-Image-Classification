@@ -1,0 +1,8 @@
+data/
+trainer_output/
+*.pt
+*.bin
+*.pth
+*.ckpt
+__pycache__/
+*.log
