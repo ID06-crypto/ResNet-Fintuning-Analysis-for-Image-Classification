@@ -5,9 +5,9 @@ import torch
 import evaluate
 from transformers import get_scheduler
 from torch.optim import AdamW
-
-# NEW: LoRA imports
 from peft import LoraConfig, get_peft_model, TaskType
+import json
+import os
 
 print("Finished Imports")
 
@@ -16,9 +16,37 @@ model_name = "microsoft/resnet-18"
 processor = AutoImageProcessor.from_pretrained(model_name)
 
 model = ResNetForImageClassification.from_pretrained(
-    model_name, 
-    num_labels=3, 
+    model_name,
+    num_labels=3,
     ignore_mismatched_sizes=True
+)
+
+def find_conv_and_linear_modules(model):
+    target = []
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+            target.append(name)
+    return target
+
+targ_mods = find_conv_and_linear_modules(model)
+
+print("collected target modules")
+
+# LoRA Configuration
+peft_config = LoraConfig(
+    inference_mode=False,
+    r=16,
+    lora_alpha=32,
+    lora_dropout=0.1,
+    target_modules=targ_mods
+)
+model = get_peft_model(model, peft_config)
+model.print_trainable_parameters()
+
+train_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomRotation(degrees=10),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
     transforms.ToTensor(),
@@ -77,7 +105,7 @@ scheduler = get_scheduler(
     "cosine",
     optimizer=optimizer,
     num_warmup_steps=500,
-    num_training_steps=(len(train_dataset) // training_args.per_device_train_batch_size) 
+    num_training_steps=(len(train_dataset) // training_args.per_device_train_batch_size)
         * training_args.num_train_epochs
 )
 
@@ -92,11 +120,10 @@ trainer = Trainer(
 
 trainer.train()
 print("Training completed.")
+
 metrics = trainer.evaluate()
 print("Model metrics:", metrics)
 
-import json
-import os
 os.makedirs("trainer_output", exist_ok=True)
 with open("trainer_output/lora_history.json", "w") as f:
     json.dump(trainer.state.log_history, f)
