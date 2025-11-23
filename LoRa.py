@@ -2,6 +2,7 @@ from transformers import AutoImageProcessor, ResNetForImageClassification, Train
 from datasets import load_dataset, Image
 from torchvision import transforms
 import torch
+import torch.nn as nn
 import evaluate
 from transformers import get_scheduler
 from torch.optim import AdamW
@@ -14,6 +15,10 @@ print("Finished Imports")
 metric = evaluate.load("accuracy")
 model_name = "microsoft/resnet-18"
 processor = AutoImageProcessor.from_pretrained(model_name)
+
+for name, param in model.named_parameters():
+    if "lora" not in name:
+        param.requires_grad = False
 
 model = ResNetForImageClassification.from_pretrained(
     model_name,
